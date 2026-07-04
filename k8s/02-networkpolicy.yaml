@@ -1,0 +1,49 @@
+# Zero Trust micro-segmentation: default-deny, then explicit allows only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: fraud-inference
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-appgw-ingress
+  namespace: fraud-inference
+spec:
+  podSelector:
+    matchLabels:
+      app: fraud-inference-api
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector: {}   # tighten to the AppGW subnet CIDR via a CiliumNetworkPolicy/Azure NPM IP-block rule if the CNI supports it
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-keyvault-and-dns
+  namespace: fraud-inference
+spec:
+  podSelector:
+    matchLabels:
+      app: fraud-inference-api
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.20.3.0/24   # private-endpoints subnet (Key Vault)
+      ports:
+        - protocol: TCP
+          port: 443
+    - ports:                      # DNS resolution
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

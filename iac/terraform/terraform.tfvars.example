@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars and fill in real values.
+# NEVER commit terraform.tfvars (it will contain sensitive info once filled).
+# Secrets (jwt_secret_key, field_encryption_key) should come from a secure
+# CI/CD variable (GitHub Actions secret / Azure DevOps variable group), e.g.:
+#   export TF_VAR_jwt_secret_key="..."
+#   export TF_VAR_field_encryption_key="..."
+
+project_name  = "fraudml"
+environment   = "prod"
+location      = "uaenorth"
+
+allowed_admin_ips = [
+  # "203.0.113.10/32"   # office/VPN egress IP — replace with real value
+]
+
+security_contact_email = "security@example.com"
+
+# jwt_secret_key       = set via TF_VAR_jwt_secret_key environment variable
+# field_encryption_key = set via TF_VAR_field_encryption_key environment variable

@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-inference-api
+  namespace: fraud-inference
+  labels:
+    app: fraud-inference-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fraud-inference-api
+  template:
+    metadata:
+      labels:
+        app: fraud-inference-api
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: fraud-inference-sa
+      automountServiceAccountToken: true
+
+      # Pod-level hardening — Zero Trust at the workload layer
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: fraud-inference-api
+          image: acrfraudml.azurecr.io/fraud-inference-api:latest   # replace with pinned digest before prod rollout
+          ports:
+            - containerPort: 8000
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: AZURE_KEY_VAULT_URL
+              value: "https://kv-fraudml-prod.vault.azure.net/"
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp   # writable scratch space since root fs is read-only
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-inference-api
+  namespace: fraud-inference
+spec:
+  selector:
+    app: fraud-inference-api
+  ports:
+    - port: 443
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP   # internal only — Application Gateway (WAF) is the sole public entry point
